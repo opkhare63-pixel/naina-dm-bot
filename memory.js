@@ -8,8 +8,22 @@
 const fs = require('fs');
 const path = require('path');
 
+// --- Where fan memory lives ---
+// Local / Render: the dataDir the caller passes (default './data').
+// Vercel serverless: the ONLY writable filesystem is /tmp, and it is
+// EPHEMERAL — it survives only while the function instance is warm and
+// is wiped on cold start. Fan memory there is BEST-EFFORT: a fan's stage,
+// warmth, notes and seen-message-ids may reset after a cold start, so a
+// returning fan can look "new" again and a Meta retry could rarely
+// double-reply. The Muse 5-minute bot keeps the durable fan files in
+// naina-dm-bot/fans/ — this /tmp copy is a cache, NOT the source of truth.
+function resolveDataDir(dataDir) {
+  if (process.env.VERCEL === '1') return '/tmp/naina-fans';
+  return dataDir;
+}
+
 function fansDir(dataDir) {
-  return path.join(dataDir, 'fans');
+  return path.join(resolveDataDir(dataDir), 'fans');
 }
 
 function safeFileName(igsid) {
@@ -75,7 +89,7 @@ function listFans(dataDir) {
 // --- Idempotency: remember processed message ids so a Meta retry never
 // triggers a double reply. Keeps the last ~500 mids in one small file.
 function seenFile(dataDir) {
-  return path.join(dataDir, 'seen_mids.json');
+  return path.join(resolveDataDir(dataDir), 'seen_mids.json');
 }
 
 function loadSeen(dataDir) {
@@ -91,7 +105,7 @@ function markSeen(dataDir, mid) {
   const seen = loadSeen(dataDir);
   seen.add(mid);
   const arr = [...seen].slice(-500);
-  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(resolveDataDir(dataDir), { recursive: true });
   fs.writeFileSync(seenFile(dataDir), JSON.stringify(arr), 'utf8');
 }
 
