@@ -54,8 +54,12 @@ that is stated honestly.
   `sender.id` is the Instagram-scoped ID (IGSID) — use it as the reply
   recipient. `is_echo: true` = echo of our own send — ignore.
 - Acknowledge with HTTP 200 within a few seconds; Meta retries failed
-  deliveries for ~36h, then drops them. Always reply 200 FIRST, then do
-  the LLM work async (this bot does that).
+  deliveries for ~36h, then drops them. On a LONG-RUNNING server, reply
+  200 first and do the LLM work async. **On Vercel serverless, do the
+  OPPOSITE: process the reply synchronously and send 200 AFTER — the
+  function freezes the moment the response is sent, so 200-first kills
+  the reply (proven 13 Nov 2026: LLM aborted ~82ms in, fallback selected
+  but never sent).**
 
 ## VERIFIED — Sending a message
 - Endpoint: `POST https://graph.instagram.com/{version}/{ig-user-id}/messages`

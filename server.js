@@ -2,8 +2,15 @@
 // Plain Node.js http, ZERO dependencies (nothing to npm-install, nothing
 // to break on a free tier). Flow:
 //   Meta webhook GET  /webhook  -> verification handshake (hub.challenge)
-//   Meta webhook POST /webhook  -> X-Hub-Signature-256 check, 200 fast,
-//                                 then reply async after a human-like pause.
+//   Meta webhook POST /webhook  -> X-Hub-Signature-256 check, then the
+//                                 reply flow runs SYNCHRONOUSLY (LLM +
+//                                 human-like pause + Graph send), and ONLY
+//                                 then 200. On Vercel serverless the
+//                                 function freezes the moment the response
+//                                 is sent, so 200-first + async work
+//                                 silently drops replies (13 Nov 2026:
+//                                 LLM aborted ~82ms in, fallback selected
+//                                 but never sent).
 //   GET  /health -> "ok" (UptimeRobot keep-alive target)
 //   GET  /       -> tiny status page
 // Proactive subscriber care runs on an in-process timer (every 30 min) and
@@ -361,17 +368,29 @@ const server = http.createServer(async (req, res) => {
           res.end('bad signature');
           return;
         }
-        // Acknowledge FAST (Meta retries if we are slow), work async.
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('EVENT_RECEIVED');
         let body;
-        try { body = JSON.parse(raw.toString('utf8')); } catch { return; }
-        if (body.object !== 'instagram') return;
-        for (const entry of body.entry || []) {
-          for (const event of entry.messaging || []) {
-            handleMessagingEvent(event).catch((e) => log('[event] error:', e.message));
+        try { body = JSON.parse(raw.toString('utf8')); } catch {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('EVENT_RECEIVED');
+          return;
+        }
+        if (body.object === 'instagram') {
+          // Process SYNCHRONOUSLY, then answer 200. Serverless freezes
+          // the moment the response is sent, so nothing may run after
+          // res.end() — the old 200-first pattern killed the reply here
+          // (LLM aborted, fallback never sent). Total pre-200 work is
+          // bounded (~18s worst case): short LLM timeouts + a modest
+          // human pause on Vercel, so Meta's ~20s window is respected.
+          // A Meta retry of the same mid is swallowed by the seen-mid
+          // dedupe in handleIncomingText/handleIncomingAttachment.
+          for (const entry of body.entry || []) {
+            for (const event of entry.messaging || []) {
+              await handleMessagingEvent(event).catch((e) => log('[event] error:', e.message));
+            }
           }
         }
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('EVENT_RECEIVED');
         return;
       }
     }

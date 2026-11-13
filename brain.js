@@ -114,7 +114,7 @@ Return ONLY valid JSON (no markdown, no code fences):
 Set "pitch_now": true ONLY if stage is 2+, warmth is 81+, never pitched before, and the fan is clearly warm right now. If pitch_now is true, the reply must be the soft fan-club invite. warmth_delta: +10 for a meaningful exchange, +5 for a compliment/question, 0 for a one-word reply, -10 if the fan went cold.`;
 }
 
-async function callGemini(apiKey, model, systemPrompt, userText) {
+async function callGemini(apiKey, model, systemPrompt, userText, timeoutMs) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
     contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nFAN'S LATEST MESSAGE:\n${userText}\n\nReply as Naina (JSON only):` }] }],
@@ -124,7 +124,7 @@ async function callGemini(apiKey, model, systemPrompt, userText) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(timeoutMs || 20000),
   });
   if (!res.ok) {
     const err = new Error(`Gemini ${res.status}`);
@@ -136,7 +136,7 @@ async function callGemini(apiKey, model, systemPrompt, userText) {
   return text;
 }
 
-async function callOpenAI(apiKey, model, systemPrompt, userText) {
+async function callOpenAI(apiKey, model, systemPrompt, userText, timeoutMs) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -150,7 +150,7 @@ async function callOpenAI(apiKey, model, systemPrompt, userText) {
       ],
       response_format: { type: 'json_object' },
     }),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(timeoutMs || 20000),
   });
   if (!res.ok) {
     const err = new Error(`OpenAI ${res.status}`);
@@ -210,7 +210,7 @@ async function generateReply(cfg, fan, history, incomingText) {
   // Primary: Gemini (free tier). Try primary model, then fallback model.
   for (const model of [cfg.geminiModel, cfg.geminiFallbackModel]) {
     try {
-      raw = await callGemini(cfg.geminiApiKey, model, systemPrompt, incomingText);
+      raw = await callGemini(cfg.geminiApiKey, model, systemPrompt, incomingText, cfg.llmTimeoutMs);
       if (raw) break;
     } catch (e) {
       lastErr = e;
@@ -221,7 +221,7 @@ async function generateReply(cfg, fan, history, incomingText) {
   // Optional fallback: OpenAI, only if a key is configured.
   if (!raw && cfg.openaiApiKey) {
     try {
-      raw = await callOpenAI(cfg.openaiApiKey, cfg.openaiModel, systemPrompt, incomingText);
+      raw = await callOpenAI(cfg.openaiApiKey, cfg.openaiModel, systemPrompt, incomingText, cfg.llmTimeoutMs);
     } catch (e) { lastErr = e; }
   }
   if (!raw) {

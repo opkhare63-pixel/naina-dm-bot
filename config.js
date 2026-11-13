@@ -24,8 +24,18 @@ function loadConfig() {
     graphVersion: process.env.GRAPH_API_VERSION || 'v26.0',
     // Human-like pause before sending a reply (webhook is instant, a real
     // girl never replies in 0.3 seconds). Random between min and max.
-    replyDelayMinMs: parseInt(process.env.REPLY_DELAY_MIN_MS || '8000', 10),
-    replyDelayMaxMs: parseInt(process.env.REPLY_DELAY_MAX_MS || '20000', 10),
+    // On Vercel the reply flow runs BEFORE the 200 (serverless freezes
+    // after the response), so the pause is kept modest there: LLM + pause
+    // + send must stay inside ~18s (Meta's ~20s window, 60s Hobby cap).
+    // Standalone/Render keeps the slower 8-20s pause (200 was fast there,
+    // but the sync flow is now the same everywhere, so the pause still
+    // counts toward Meta's window — env can raise it if ever needed).
+    replyDelayMinMs: parseInt(process.env.REPLY_DELAY_MIN_MS || (process.env.VERCEL === '1' ? '2000' : '8000'), 10),
+    replyDelayMaxMs: parseInt(process.env.REPLY_DELAY_MAX_MS || (process.env.VERCEL === '1' ? '5000' : '20000'), 10),
+    // Per-attempt LLM timeout. Vercel default 10s (two attempts max, so
+    // worst case LLM is ~20s; standalone keeps the old 20s). Overridable
+    // with LLM_TIMEOUT_MS.
+    llmTimeoutMs: parseInt(process.env.LLM_TIMEOUT_MS || (process.env.VERCEL === '1' ? '10000' : '20000'), 10),
     dataDir: process.env.DATA_DIR || './data',
     // Public base URL of this server (needed to send photos as attachments).
     // Example: https://naina-dm-bot.onrender.com

@@ -10,6 +10,16 @@ Unlimited contacts — ManyChat jaisi koi limit nahi.
 hai — card bilkul nahi chahiye.** Render sirf alternative hai, agar card
 daalna ho to.
 
+**13 Nov 2026 — LIVE CORRECTION (Vercel):** Vercel is deployment par `api/`
+wale functions **bante hi nahi** — poora bot `server.js` se bane ek hi
+function (`/index`) par chalta hai. Isliye webhook URL **`/webhook`** hai
+(`https://<tumhara-app>.vercel.app/webhook`, `/api/webhook` NAHI) aur health
+**`/health`** hai ("ok" text). Aur `server.js` me reply flow **200 se
+PEHLE synchronous** hota hai (LLM + chhoti pause + Graph send, phir 200) —
+200-pehle-bhejo pattern Vercel serverless par reply kha jata hai (function
+response ke baad freeze ho jata hai). Neeche Step 3A/4/6 me jo `/api/...`
+likha hai, use `/...` (root) padho.
+
 **Time lagega:** pehli baar setup me 1-2 ghante + Meta App Review me kuch din.
 **Nittu ko khud karna hai:** steps 1, 2, 5, 6 (uske logins hain). Baaki code
 pehle se bana hua hai.
