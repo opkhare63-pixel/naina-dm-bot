@@ -1,0 +1,28 @@
+# Render one-click deploy (optional — you can also create the service by hand).
+# Render reads this file when you connect the repo. Free plan: spins down
+# after 15 min idle; keep awake with UptimeRobot (see SETUP.md).
+services:
+  - type: web
+    name: naina-dm-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: VERIFY_TOKEN
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: IG_ACCESS_TOKEN
+        sync: false
+      - key: IG_USER_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_FALLBACK_MODEL
+        value: gemini-3.8-flash
+      - key: GRAPH_API_VERSION
+        value: v26.0
